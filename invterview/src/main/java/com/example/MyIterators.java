@@ -7,6 +7,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import org.apache.commons.lang3.Validate;
 
@@ -18,14 +19,11 @@ public class MyIterators {
 		Validate.isTrue(partitionSize > 1, "Partition size should be greater than 1.", partitionSize);
 		Validate.isTrue(input != null, "Input sequence should not be null");
 		final Iterator<T> iterator = input.iterator();
-		return new Iterable<Iterable<T>>() {
-			@Override
-			public Iterator<Iterable<T>> iterator() {
-				if (iterator.hasNext()) {
-					return new PartsIterator<T>(iterator, partitionSize);
-				} else {
-					return Iterators.emptyIterator();
-				}
+		return () -> {
+			if (iterator.hasNext()) {
+				return new PartsIterator<T>(iterator, partitionSize);
+			} else {
+				return Iterators.emptyIterator();
 			}
 		};
 	}
@@ -56,13 +54,7 @@ public class MyIterators {
 			if (baseIterator.hasNext()) {
 				first = partition.get(lastIndexInPartition);
 			}
-			return new Iterable<T>() {
-
-				@Override
-				public Iterator<T> iterator() {
-					return result;
-				}
-			};
+			return () -> result;
 		}
 
 		@Override
@@ -72,8 +64,10 @@ public class MyIterators {
 	}
 	
 	
-	public static <T> Stream<Collection<T>> partitionWithStreams(final Stream<T> input, final int partitionSize) {
-		return input.map(partition(new PartitionWrapper<>(partitionSize))).filter(e -> e.size() > 0);
+	public static <T> Iterable<Iterable<T>> partitionWithStreams(final Iterable<T> input, final int partitionSize) {
+		Validate.isTrue(partitionSize > 1, "Partition size should be greater than 1.", partitionSize);
+		Validate.isTrue(input != null, "Input sequence should not be null");
+		return () -> StreamSupport.stream(input.spliterator(), false).map(partition(new PartitionWrapper<>(partitionSize))).filter(e -> e.iterator().hasNext()).iterator();
 	}
 	
 
@@ -94,24 +88,25 @@ public class MyIterators {
 		}
 		
 		void reset() {
-			partition = new LinkedList<>();
+			partition.clear();
 		}
 
 	};
 	
-	private static <T> Function<T, Collection<T>> partition(final PartitionWrapper<T> partiotionWrapper) {
+	private static <T> Function<T, Iterable<T>> partition(final PartitionWrapper<T> partiotionWrapper) {
 		
-		return new Function<T, Collection<T>>() {
+		return new Function<T, Iterable<T>>() {
 			int i = 0;
 			
 			@Override
-			public Collection<T> apply(T t) {
+			public Iterable<T> apply(T t) {
 				partiotionWrapper.add(t);
+				System.out.println(t);
 				if (i++ % partiotionWrapper.size == 0 && i > 1) {
 					Collection<T> partition = partiotionWrapper.getPartition();
 					partiotionWrapper.reset();
 					partiotionWrapper.add(t);
-					return partition;
+					return() -> partition.iterator();
 				} else {
 					return Collections.<T>emptyList();
 				}
