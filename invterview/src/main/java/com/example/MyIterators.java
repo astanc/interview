@@ -1,5 +1,8 @@
 package com.example;
 
+import com.google.common.collect.Iterators;
+import org.apache.commons.lang3.Validate;
+
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -8,24 +11,17 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.Validate;
-
-import com.google.common.collect.Iterators;
-
 public class MyIterators {
 
 	public static <T> Iterable<Iterable<T>> partitionsInclusive(final Iterable<T> input, final int partitionSize) {
 		Validate.isTrue(partitionSize > 1, "Partition size should be greater than 1.", partitionSize);
 		Validate.isTrue(input != null, "Input sequence should not be null");
 		final Iterator<T> iterator = input.iterator();
-		return new Iterable<Iterable<T>>() {
-			@Override
-			public Iterator<Iterable<T>> iterator() {
-				if (iterator.hasNext()) {
-					return new PartsIterator<T>(iterator, partitionSize);
-				} else {
-					return Iterators.emptyIterator();
-				}
+		return () -> {
+			if (iterator.hasNext()) {
+				return new PartsIterator<T>(iterator, partitionSize);
+			} else {
+				return Iterators.emptyIterator();
 			}
 		};
 	}
@@ -56,13 +52,7 @@ public class MyIterators {
 			if (baseIterator.hasNext()) {
 				first = partition.get(lastIndexInPartition);
 			}
-			return new Iterable<T>() {
-
-				@Override
-				public Iterator<T> iterator() {
-					return result;
-				}
-			};
+			return () -> result;
 		}
 
 		@Override
