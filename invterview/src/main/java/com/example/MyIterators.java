@@ -1,15 +1,11 @@
 package com.example;
 
-import com.google.common.collect.Iterators;
-import org.apache.commons.lang3.Validate;
-
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.function.Function;
-import java.util.stream.Stream;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.IntStream;
+
+import org.apache.commons.lang3.Validate;
 
 public class MyIterators {
 
@@ -17,27 +13,19 @@ public class MyIterators {
 		Validate.isTrue(partitionSize > 1, "Partition size should be greater than 1.", partitionSize);
 		Validate.isTrue(input != null, "Input sequence should not be null");
 		final Iterator<T> iterator = input.iterator();
-		return () -> {
-			if (iterator.hasNext()) {
-				return new PartsIterator<T>(iterator, partitionSize);
-			} else {
-				return Iterators.emptyIterator();
-			}
-		};
+		return () -> new PartitioningIterator<T>(iterator, partitionSize);
 	}
 	
-	private static class PartsIterator<T> implements Iterator<Iterable<T>> {
+	private static class PartitioningIterator<E> implements Iterator<Iterable<E>> {
 
-		private final Iterator<List<T>> baseIterator;
-		private final int partitionSize;
-		private final int lastIndexInPartition;
-		private T first;
-		
-		public PartsIterator(Iterator<T> input, int partitionSize) {
-			this.partitionSize = partitionSize - 1;
-			this.lastIndexInPartition = partitionSize - 2;
-			this.first = input.next();
-			this.baseIterator = Iterators.partition(input, this.partitionSize);
+		private final Iterator<E> baseIterator;
+		private final int chunkSize;
+		private Optional<E> lastElement;
+
+		PartitioningIterator(final Iterator<E> baseIterator, int chunkSize) {
+			this.baseIterator = baseIterator;
+			this.chunkSize = chunkSize;
+			lastElement = Optional.empty();
 		}
 		
 		@Override
@@ -46,66 +34,24 @@ public class MyIterators {
 		}
 
 		@Override
-		public Iterable<T> next() {
-			List<T> partition = baseIterator.next();
-			final Iterator<T> result = Iterators.concat(Iterators.singletonIterator(first), partition.iterator());
-			if (baseIterator.hasNext()) {
-				first = partition.get(lastIndexInPartition);
-			}
-			return () -> result;
+		public Iterable<E> next() {
+			final IntStream chunk = IntStream.range(0, chunkSize);
+			return () -> {
+				return chunk.mapToObj(e -> {
+					if (baseIterator.hasNext()) {
+						if (e > 0 && e < chunkSize - 1) {
+							return baseIterator.next();
+						} else if (e == 0) {
+							return lastElement.orElseGet(baseIterator::next);
+						} else {
+							lastElement = Optional.of(baseIterator.next());
+							return lastElement.get();
+						}
+					} else {
+						return null;
+					}
+				}).filter(Objects::nonNull).iterator();
+			};
 		}
-
-		@Override
-		public void remove() {
-			throw new UnsupportedOperationException();
-		}
-	}
-	
-	
-	public static <T> Stream<Collection<T>> partitionWithStreams(final Stream<T> input, final int partitionSize) {
-		return input.map(partition(new PartitionWrapper<>(partitionSize))).filter(e -> e.size() > 0);
-	}
-	
-
-	private static class PartitionWrapper<T> {
-		final int size;
-		private List<T> partition = new LinkedList<>();
-		
-		PartitionWrapper(final int size) {
-			this.size = size - 1;
-		}
-		
-		void add(T element) {
-			partition.add(element);
-		}
-		
-		Collection<T> getPartition() {
-			return partition;
-		}
-		
-		void reset() {
-			partition = new LinkedList<>();
-		}
-
-	};
-	
-	private static <T> Function<T, Collection<T>> partition(final PartitionWrapper<T> partiotionWrapper) {
-		
-		return new Function<T, Collection<T>>() {
-			int i = 0;
-			
-			@Override
-			public Collection<T> apply(T t) {
-				partiotionWrapper.add(t);
-				if (i++ % partiotionWrapper.size == 0 && i > 1) {
-					Collection<T> partition = partiotionWrapper.getPartition();
-					partiotionWrapper.reset();
-					partiotionWrapper.add(t);
-					return partition;
-				} else {
-					return Collections.<T>emptyList();
-				}
-			}
-		};
 	}
 }
